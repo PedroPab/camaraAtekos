@@ -1,0 +1,45 @@
+# Ignorar archivos y directorios de construcción
+build/
+*.bin
+*.elf
+*.hex
+*.eep
+
+# Ignorar archivos de la plataforma Arduino
+*.pde
+*.ino~
+
+# Ignorar archivos generados por el IDE
+*.bak
+*.tmp
+*.log
+*.tmp.*
+
+# Ignorar archivos de configuración específicos del usuario
+*.cpp.o
+*.d
+*.pyc
+*.class
+*.swp
+*.swo
+*.DS_Store
+.vscode/
+.idea/
+*.iml
+
+# Ignorar librerías externas
+libraries/
+
+# Ignorar archivos de configuración del entorno
+*.env
+.env.local
+
+# Ignorar archivos de proyecto de IntelliJ IDEA
+*.iml
+.idea/
+
+# Ignorar archivos de configuración de Visual Studio Code
+.vscode/
+
+# Ignorar archivos de configuración propios
+config.h
