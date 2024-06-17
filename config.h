@@ -9,7 +9,7 @@
 #if MODE_PRODUCTION
   #define WIFI_SSID "CLARO_WIFIC2"
   #define WIFI_PASSWORD "CLAROI06367"
-  #define SERVER_URL "serveratekosroom-production.up.railway.app"
+  #define SERVER_URL "https://serveratekosroom-production.up.railway.app"
   #define ENDPOINT_API_UP_IMG "/api/v1/img"
   #define SERVER_PORT 443
   #define USE_HTTPS true
