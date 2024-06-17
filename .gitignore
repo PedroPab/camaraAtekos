@@ -43,3 +43,4 @@ libraries/
 
 # Ignorar archivos de configuración propios
 config.h
+theia/

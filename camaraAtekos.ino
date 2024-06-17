@@ -177,22 +177,7 @@ camera_fb_t* capturePhoto() {
   return fb;
 }
 
-bool connectToServer(WiFiClientSecure& client, const char* server, uint16_t port) {
-  client.setInsecure();  // No SSL certificate verification (use only for development)
-  Serial.print("Connecting to server: ");
-  Serial.print(server);
-  Serial.print(":");
-  Serial.println(port);
-
-  if (!client.connect(server, port)) {
-    Serial.println("Connection to server failed");
-    return false;
-  }
-  Serial.println("Connected to server");
-  return true;
-}
-
-void sendPhoto(WiFiClientSecure& client, camera_fb_t* fb) {
+void sendPhoto(camera_fb_t* fb) {
   if (!fb) {
     Serial.println("No photo to send");
     return;
@@ -204,42 +189,43 @@ void sendPhoto(WiFiClientSecure& client, camera_fb_t* fb) {
 
   int contentLength = head.length() + fb->len + tail.length();
 
-  client.println("POST " + String(ENDPOINT_API_UP_IMG) + " HTTP/1.1");
-  client.println("Host: " + String(SERVER_URL));
-  client.println("User-Agent: ESP32CAM/1.0");
-  client.println("Content-Type: multipart/form-data; boundary=" + boundary);
-  client.println("Content-Length: " + String(contentLength));
-  client.println();
-  client.print(head);
-
-  size_t fb_len = fb->len;
-  uint8_t* fb_buf = fb->buf;
-  while (fb_len > 0) {
-    size_t chunkSize = fb_len;
-    if (chunkSize > 1024) {
-      chunkSize = 1024;
-    }
-    client.write(fb_buf, chunkSize);
-    fb_buf += chunkSize;
-    fb_len -= chunkSize;
+  // Crear un buffer para el cuerpo del mensaje
+  uint8_t* body = (uint8_t*)malloc(contentLength);
+  if (!body) {
+    Serial.println("Failed to allocate memory for body");
+    esp_camera_fb_return(fb);
+    return;
   }
 
-  client.print(tail);
+  // Copiar el encabezado, la imagen y el pie al buffer
+  memcpy(body, head.c_str(), head.length());
+  memcpy(body + head.length(), fb->buf, fb->len);
+  memcpy(body + head.length() + fb->len, tail.c_str(), tail.length());
 
-  int waitTime = 10000;  // Wait up to 10 seconds for a response
-  long startTime = millis();
-  while (client.connected() && (millis() - startTime < waitTime)) {
-    if (client.available()) {
-      String response = client.readString();
+  String serverName = String(SERVER_URL) + ":" + String(SERVER_PORT) + String(ENDPOINT_API_UP_IMG);
+  http.begin(serverName);  // URL del servidor
+  http.addHeader("Content-Type", "multipart/form-data; boundary=" + boundary);
+  
+  int httpResponseCode = http.POST(body, contentLength);
+
+  if (httpResponseCode > 0) {
+    String response = http.getString();
+    Serial.println("Server response:");
+    Serial.println(response);
+  } else {
+    Serial.print("Error on sending POST: ");
+    Serial.println(httpResponseCode);
+    Serial.println("Error message: " + http.errorToString(httpResponseCode));
+    if (httpResponseCode < 0) {
+      String response = http.getString();
       Serial.println("Server response:");
       Serial.println(response);
-      break;
     }
-    delay(100);
   }
 
-  client.stop();
+  http.end();
   esp_camera_fb_return(fb);
+  free(body); // Liberar la memoria asignada
   Serial.println("Photo sent and client disconnected");
 }
 
@@ -255,16 +241,10 @@ void setup() {
 }
 
 void loop() {
-  WiFiClientSecure client;
-
   if (WiFi.status() == WL_CONNECTED) {
     // Ejecutar funcionalidades adicionales cuando esté conectado al WiFi
-    if (connectToServer(client, SERVER_URL, SERVER_PORT)) {
-      camera_fb_t* fb = capturePhoto();
-      sendPhoto(client, fb);
-    } else {
-      Serial.println("Retrying in 10 seconds...");
-    }
+    camera_fb_t* fb = capturePhoto();
+    sendPhoto(fb);
     delay(timeCapture);  // Esperar 10 segundos antes de capturar y enviar otra foto
   } else {
     server.handleClient();  // Manejar las solicitudes del servidor web en modo AP
