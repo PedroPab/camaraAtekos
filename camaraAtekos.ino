@@ -27,10 +27,9 @@ HTTPClient http;
 String ssid;
 String password;
 
-const int timeCapture = 2880000;
-
-unsigned long lastAttemptTime = 0;
+const int timeCapture = 10000;
 const unsigned long attemptInterval = 300000;  // 5 minutos
+unsigned long lastAttemptTime = 0;
 
 void saveCredentials(String ssid, String password) {
   preferences.begin("wifi", false);
@@ -55,7 +54,7 @@ void connectToWiFi() {
   Serial.println(password);
 
   int attempts = 0;
-  while (WiFi.status() != WL_CONNECTED && attempts < 20) {
+  while (WiFi.status() != WL_CONNECTED && attempts < 40) { // Incrementado a 40 intentos
     delay(500);
     Serial.print(".");
     attempts++;
@@ -150,6 +149,15 @@ void initCamera() {
   }
 
   Serial.println("Camera init succeeded");
+
+  // Descartar los primeros fotogramas
+  for (int i = 0; i < 2; i++) {
+    camera_fb_t* fb = esp_camera_fb_get();
+    if (fb) {
+      esp_camera_fb_return(fb);
+    }
+    delay(100);
+  }
 }
 
 camera_fb_t* capturePhoto() {
@@ -169,17 +177,8 @@ camera_fb_t* capturePhoto() {
   return fb;
 }
 
-bool connectToServer(
-#ifdef USE_HTTPS
-  WiFiClientSecure& client
-#else
-  WiFiClient& client
-#endif
-  ,
-  const char* server, uint16_t port) {
-#ifdef USE_HTTPS
+bool connectToServer(WiFiClientSecure& client, const char* server, uint16_t port) {
   client.setInsecure();  // No SSL certificate verification (use only for development)
-#endif
   Serial.print("Connecting to server: ");
   Serial.print(server);
   Serial.print(":");
@@ -193,14 +192,7 @@ bool connectToServer(
   return true;
 }
 
-void sendPhoto(
-#ifdef USE_HTTPS
-  WiFiClientSecure& client
-#else
-  WiFiClient& client
-#endif
-  ,
-  camera_fb_t* fb) {
+void sendPhoto(WiFiClientSecure& client, camera_fb_t* fb) {
   if (!fb) {
     Serial.println("No photo to send");
     return;
@@ -212,8 +204,9 @@ void sendPhoto(
 
   int contentLength = head.length() + fb->len + tail.length();
 
-  client.println("POST /img HTTP/1.1");
+  client.println("POST " + String(ENDPOINT_API_UP_IMG) + " HTTP/1.1");
   client.println("Host: " + String(SERVER_URL));
+  client.println("User-Agent: ESP32CAM/1.0");
   client.println("Content-Type: multipart/form-data; boundary=" + boundary);
   client.println("Content-Length: " + String(contentLength));
   client.println();
@@ -262,11 +255,8 @@ void setup() {
 }
 
 void loop() {
-#ifdef USE_HTTPS
   WiFiClientSecure client;
-#else
-  WiFiClient client;
-#endif
+
   if (WiFi.status() == WL_CONNECTED) {
     // Ejecutar funcionalidades adicionales cuando esté conectado al WiFi
     if (connectToServer(client, SERVER_URL, SERVER_PORT)) {
